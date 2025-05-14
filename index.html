@@ -1,0 +1,18 @@
+<button onclick="sendValue(1)">カバ</button>
+<button onclick="sendValue(2)">ウサギ</button>
+<button onclick="sendValue(3)">モモンガ</button>
+<button onclick="sendValue(4)">ニホンザル</button>
+
+<script>
+function sendValue(num) {
+  fetch("http://10.192.98.172:8080", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ value: num })
+  }).then(res => {
+    console.log("送信完了: " + num);
+  });
+}
+</script>
