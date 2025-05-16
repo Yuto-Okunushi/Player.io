@@ -1,18 +1,21 @@
-<button onclick="sendValue(1)">カバ</button>
-<button onclick="sendValue(2)">ウサギ</button>
-<button onclick="sendValue(3)">モモンガ</button>
-<button onclick="sendValue(4)">ニホンザル</button>
+<button onclick="send(1)">カバ</button>
+<button onclick="send(2)">ウサギ</button>
+<button onclick="send(3)">モモンガ</button>
+<button onclick="send(4)">ニホンザル</button>
 
 <script>
-function sendValue(num) {
-  fetch("http://10.192.141.37:8080", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ value: num })
-  }).then(res => {
-    console.log("送信完了: " + num);
-  });
+let socket = new WebSocket("ws://10.192.98.172:4649/input");
+
+socket.onopen = () => console.log("接続完了");
+socket.onerror = (e) => console.error("エラー:", e);
+socket.onmessage = (e) => console.log("受信:", e.data);
+
+function send(value) {
+    if (socket.readyState === WebSocket.OPEN) {
+        socket.send(value.toString());
+        console.log("送信:", value);
+    } else {
+        console.warn("ソケットが開いていません");
+    }
 }
 </script>
