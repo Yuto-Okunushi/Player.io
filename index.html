@@ -4,7 +4,7 @@
 <button onclick="send(4)">ニホンザル</button>
 
 <script>
-let socket = new WebSocket("ws://10.192.98.172:4649/input");
+let socket = new WebSocket("http://10.192.98.172:8080/input");
 
 socket.onopen = () => console.log("接続完了");
 socket.onerror = (e) => console.error("エラー:", e);
