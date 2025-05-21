@@ -1,21 +1,31 @@
-<button onclick="send(1)">カバ</button>
-<button onclick="send(2)">ウサギ</button>
-<button onclick="send(3)">モモンガ</button>
-<button onclick="send(4)">ニホンザル</button>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>動物ボタン</title>
+</head>
+<body>
+  <button onclick="send(1)">カバ</button>
+  <button onclick="send(2)">ウサギ</button>
+  <button onclick="send(3)">モモンガ</button>
+  <button onclick="send(4)">ニホンザル</button>
 
-<script>
-let socket = new WebSocket("ws://3.104.77.27:8080");
+  <script>
+    // ← 安全なWebSocket通信：wss + あなたのEC2のパブリックDNS名
+    const socket = new WebSocket("wss://ec2-3-27-119-133.ap-northeast-1.compute.amazonaws.com:8080");
 
-socket.onopen = () => console.log("接続完了");
-socket.onerror = (e) => console.error("エラー:", e);
-socket.onmessage = (e) => console.log("受信:", e.data);
+    socket.onopen = () => console.log("接続完了");
+    socket.onerror = (e) => console.error("エラー:", e);
+    socket.onmessage = (e) => console.log("受信:", e.data);
 
-function send(value) {
-    if (socket.readyState === WebSocket.OPEN) {
+    function send(value) {
+      if (socket.readyState === WebSocket.OPEN) {
         socket.send(value.toString());
         console.log("送信:", value);
-    } else {
+      } else {
         console.warn("ソケットが開いていません");
+      }
     }
-}
-</script>
+  </script>
+</body>
+</html>
