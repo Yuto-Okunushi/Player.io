@@ -12,7 +12,7 @@
 
   <script>
     // ← 安全なWebSocket通信：wss + あなたのEC2のパブリックDNS名
-    const socket = new WebSocket("wss://ec2-3-27-119-133.ap-northeast-1.compute.amazonaws.com:8080");
+    const socket = new WebSocket("ws://ec2-3-27-119-133.ap-northeast-1.compute.amazonaws.com:8080");
 
     socket.onopen = () => console.log("接続完了");
     socket.onerror = (e) => console.error("エラー:", e);
