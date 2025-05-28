@@ -606,6 +606,10 @@
         let selectedActionId = null;
         let gameState = "initial"; // initial, connecting, room_selection, room_creation_wait, room_join_input, waiting_players, reveal, waiting_for_players_ready, main, discussion
 
+        // セッションIDの保存と取得
+        const SESSION_ID_KEY = 'game_session_id';
+        let sessionId = localStorage.getItem(SESSION_ID_KEY);
+
         // 動物データ
         const animals = {
             1: { name: "カバ", description: "水辺に住む大きな動物です。", image: "CH_kaba_ver001.png" },
@@ -688,15 +692,19 @@
                     connectionStatus.className = "connection-status status-connected";
                     stopLoadingAnimation();
                     
-                    // 接続成功後、部屋選択画面を表示
-                    roomSelectionScreen.style.display = "flex";
-                    roomSelectionMessage.textContent = "ようこそ！";
-                    roomSelectionButtons.style.display = "block"; // ボタン表示
-                    joinRoomInputArea.style.display = "none"; // 参加入力エリア非表示
-                    createdRoomDisplay.style.display = "none"; // 作成済み部屋表示非表示
-                    waitingForPlayersMessage.style.display = "none"; // 待機メッセージ非表示
+                    // サーバーにセッション情報を送信
+                    if (!sessionId) {
+                        // 初回接続またはセッションIDがない場合
+                        sessionId = Math.random().toString(36).substring(2, 10);
+                        localStorage.setItem(SESSION_ID_KEY, sessionId);
+                        console.log("新しいSessionIDを生成:", sessionId);
+                    }
+                    socket.send(JSON.stringify({ type: "init_session", sessionId: sessionId }));
 
-                    gameState = "room_selection"; // 部屋選択状態
+                    // UIはまだ表示しない。サーバーからの応答を待つ。
+                    roomSelectionScreen.style.display = "none";
+                    animalReveal.style.display = "none";
+                    mainContent.style.display = "none";
                 };
 
                 socket.onerror = (error) => {
@@ -704,11 +712,13 @@
                     connectionStatus.textContent = "接続エラー";
                     connectionStatus.className = "connection-status status-disconnected";
                     roomSelectionMessage.textContent = "接続エラーが発生しました。再接続を試みます...";
-                    roomSelectionScreen.style.display = "flex";
+                    roomSelectionScreen.style.display = "flex"; // エラー表示
                     roomSelectionButtons.style.display = "none";
                     joinRoomInputArea.style.display = "none";
                     createdRoomDisplay.style.display = "none";
                     waitingForPlayersMessage.style.display = "none";
+                    animalReveal.style.display = "none";
+                    mainContent.style.display = "none";
                     stopLoadingAnimation();
                 };
 
@@ -725,25 +735,43 @@
                     console.warn("⚠️ WebSocket接続が閉じられました。コード:", event.code, "理由:", event.reason);
                     connectionStatus.textContent = "接続切断";
                     connectionStatus.className = "connection-status status-disconnected";
-                    
-                    if (event.code !== 1000 && !event.wasClean) {
-                        roomSelectionMessage.textContent = "サーバーとの接続が切断されました。再接続を試みます...";
+                    stopLoadingAnimation();
+
+                    if (event.code === 1000) { // 正常終了 (自ら閉じた場合など)
+                        roomSelectionMessage.textContent = "セッションが終了しました。";
                         roomSelectionScreen.style.display = "flex";
-                        roomSelectionButtons.style.display = "none"; // ボタンを非表示
+                        roomSelectionButtons.style.display = "block"; 
                         joinRoomInputArea.style.display = "none";
                         createdRoomDisplay.style.display = "none";
                         waitingForPlayersMessage.style.display = "none";
-                        stopLoadingAnimation();
-                        setTimeout(connectWebSocket, 3000); // 3秒後に再接続を試行
-                    } else if (event.code === 1000) {
-                        roomSelectionMessage.textContent = "セッションが終了しました。";
+                        animalReveal.style.display = "none";
+                        mainContent.style.display = "none";
+                        assignedRoomId = null; // 部屋IDをリセット
+                        userId = null; // ユーザーIDもリセット
+                    } else if (event.code === 1008) { // ポリシー違反 (サーバーがエラーで切断した場合など)
+                        roomSelectionMessage.textContent = "サーバーから切断されました。エラー: " + event.reason + " 再度お試しください。";
                         roomSelectionScreen.style.display = "flex";
                         roomSelectionButtons.style.display = "block"; // 新しいセッション開始のためボタン表示
                         joinRoomInputArea.style.display = "none";
                         createdRoomDisplay.style.display = "none";
                         waitingForPlayersMessage.style.display = "none";
-                        stopLoadingAnimation();
-                        assignedRoomId = null; // 部屋IDをリセット
+                        animalReveal.style.display = "none";
+                        mainContent.style.display = "none";
+                        assignedRoomId = null;
+                        userId = null;
+                        localStorage.removeItem(SESSION_ID_KEY); // 無効なセッションIDをクリア
+                        sessionId = null;
+                        setTimeout(connectWebSocket, 3000); // 3秒後に再接続を試行
+                    } else { // 異常終了または予期せぬ切断
+                        roomSelectionMessage.textContent = "サーバーとの接続が切断されました。再接続を試みます...";
+                        roomSelectionScreen.style.display = "flex";
+                        roomSelectionButtons.style.display = "none"; 
+                        joinRoomInputArea.style.display = "none";
+                        createdRoomDisplay.style.display = "none";
+                        waitingForPlayersMessage.style.display = "none";
+                        animalReveal.style.display = "none";
+                        mainContent.style.display = "none";
+                        setTimeout(connectWebSocket, 3000); // 3秒後に再接続を試行
                     }
                 };
 
@@ -757,24 +785,28 @@
                 joinRoomInputArea.style.display = "none";
                 createdRoomDisplay.style.display = "none";
                 waitingForPlayersMessage.style.display = "none";
+                animalReveal.style.display = "none";
+                mainContent.style.display = "none";
                 stopLoadingAnimation();
+                setTimeout(connectWebSocket, 5000); // 少し長めに待って再試行
             }
         }
 
         // 部屋作成ボタン
         createRoomButton.addEventListener("click", () => {
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({ type: "create_room" }));
+            if (socket && socket.readyState === WebSocket.OPEN && userId) { // userIdが確定していることを確認
+                socket.send(JSON.stringify({ type: "create_room", userId: userId })); // userIdを送信
                 roomSelectionMessage.textContent = "部屋を作成中...";
                 roomSelectionButtons.style.display = "none";
                 joinRoomInputArea.style.display = "none";
                 createdRoomDisplay.style.display = "none";
-                waitingForPlayersMessage.style.display = "flex"; // 待機メッセージ表示
+                waitingForPlayersMessage.style.display = "flex";
                 startLoadingAnimation(waitingMessage, "部屋を作成中");
                 gameState = "room_creation_wait";
             } else {
-                alert("サーバーに接続されていません。");
-                connectWebSocket(); // 再接続を試みる
+                alert("サーバーに接続されていません、またはユーザーIDが未確定です。");
+                // 強制的に再接続とセッション初期化を試みる
+                connectWebSocket(); 
             }
         });
 
@@ -791,19 +823,20 @@
         joinRoomButton.addEventListener("click", () => {
             const roomId = roomIdInput.value.trim();
             if (roomId) {
-                if (socket && socket.readyState === WebSocket.OPEN) {
+                if (socket && socket.readyState === WebSocket.OPEN && userId) { // userIdが確定していることを確認
                     assignedRoomId = roomId;
                     socket.send(JSON.stringify({
                         type: "join_room",
-                        roomId: roomId
+                        roomId: roomId,
+                        userId: userId // userIdを送信
                     }));
                     roomSelectionMessage.textContent = `部屋 ${roomId} に参加中...`;
                     joinRoomInputArea.style.display = "none";
-                    waitingForPlayersMessage.style.display = "flex"; // 待機メッセージ表示
+                    waitingForPlayersMessage.style.display = "flex";
                     startLoadingAnimation(waitingMessage, `部屋 ${roomId} に参加中`);
                     gameState = "waiting_players";
                 } else {
-                    alert("サーバーに接続されていません。");
+                    alert("サーバーに接続されていません、またはユーザーIDが未確定です。");
                     connectWebSocket();
                 }
             } else {
@@ -831,9 +864,9 @@
         
         // 部屋キャンセルボタン (部屋作成者が部屋を閉じる場合)
         cancelRoomButton.addEventListener("click", () => {
-             if (socket && socket.readyState === WebSocket.OPEN && assignedRoomId) {
-                // サーバーに部屋キャンセルを通知するメッセージを送ることも可能だが、
-                // 今回はクライアント側で状態をリセットし、サーバーは接続切断で部屋をクリーンアップする想定
+             if (socket && socket.readyState === WebSocket.OPEN) {
+                // サーバーに部屋キャンセルを通知する特別なメッセージを送ることも可能
+                // 今回はシンプルに切断で部屋を削除する
                 socket.close(1000, "Room creation cancelled by user"); // 正常終了
             }
             // UIを初期状態に戻す
@@ -843,8 +876,9 @@
             roomSelectionMessage.textContent = "ようこそ！";
             stopLoadingAnimation();
             assignedRoomId = null; // 部屋IDをリセット
+            // userId は保持したまま、次のセッションに引き継ぐ可能性があるのでリセットしない
             gameState = "room_selection";
-            connectWebSocket(); // WebSocketを再接続して新しいセッションを開始
+            // reconnectWebSocket(); // 再接続してセッションを再利用
         });
 
 
@@ -853,6 +887,63 @@
             console.log("📩 サーバーメッセージ:", data);
 
             switch (data.type) {
+                case "session_established":
+                    // サーバーからuserIdとsessionIdが確定したことを通知
+                    userId = data.userId;
+                    sessionId = data.sessionId;
+                    localStorage.setItem(SESSION_ID_KEY, sessionId); // 確定したsessionIdを保存
+                    console.log(`セッション確立。UserID: ${userId}, SessionID: ${sessionId}`);
+
+                    // 再接続の場合、reconnected メッセージでゲーム情報が送られてくるので、
+                    // その後の処理は reconnected ケースで行う。
+                    // 新規接続の場合は、ここで部屋選択画面を表示。
+                    if (!assignedRoomId) { // まだ部屋にいない場合のみ
+                        roomSelectionScreen.style.display = "flex";
+                        roomSelectionMessage.textContent = "ようこそ！";
+                        roomSelectionButtons.style.display = "block";
+                        joinRoomInputArea.style.display = "none";
+                        createdRoomDisplay.style.display = "none";
+                        waitingForPlayersMessage.style.display = "none";
+                        gameState = "room_selection";
+                    }
+                    break;
+
+                case "reconnected":
+                    userId = data.userId;
+                    currentAnimalId = data.animalId;
+                    assignedRoomId = data.roomId;
+                    players = data.players; // 最新のプレイヤー情報を受信する
+
+                    console.log(`再接続成功。UserID: ${userId}, 部屋ID: ${assignedRoomId}, 動物ID: ${currentAnimalId}`);
+                    
+                    // UIを再接続先のゲームフェーズに合わせる
+                    roomSelectionScreen.style.display = "none"; // 部屋選択画面を非表示
+                    animalReveal.style.display = "none"; // 動物公開画面も非表示
+                    mainContent.style.display = "block"; // メインコンテンツを表示
+
+                    updateAnimalDisplay(currentAnimalId); // 動物情報を表示
+                    updatePlayersDisplay(); // プレイヤーリストを更新
+                    playersInfo.style.display = "block"; // プレイヤー情報を表示
+
+                    // 現在のゲームフェーズに応じてUIを調整
+                    if (data.gamePhase === "waiting_for_players" || data.gamePhase === "animal_reveal") {
+                        // 部屋に参加したばかり、または動物公開を待っている状態
+                        statusMessage.style.display = "block";
+                        startLoadingAnimation(statusMessage, "他のユーザーを待っています");
+                        headline.style.display = "none";
+                        cardContainer.style.display = "none";
+                        countdownTimer.style.display = "none";
+                        gameState = "waiting_for_players_ready"; // この状態に戻す
+                    } else if (data.gamePhase === "story_progress") {
+                        handleGamePhase("story_progress");
+                    } else if (data.gamePhase === "action_select") {
+                        handleGamePhase("action_select");
+                        // カウントダウンも再開されるので、必要ならその情報もここで処理
+                    } else if (data.gamePhase === "discussion") {
+                        handleGamePhase("discussion");
+                    }
+                    break;
+
                 case "room_created": // 部屋作成成功
                     assignedRoomId = data.roomId;
                     displayRoomCode.textContent = data.roomId;
@@ -866,10 +957,10 @@
                     gameState = "waiting_players"; // プレイヤー待ち状態
                     break;
 
-                case "user_assigned": // プレイヤー全員が揃った後、動物が割り振られた通知
-                    userId = data.userId;
+                case "user_assigned": // プレイヤー全員が揃う前、または途中参加者が動物割り振りを受け取った通知
+                    userId = data.userId; // サーバーから返された確定userId
                     currentAnimalId = data.animalId;
-                    assignedRoomId = data.roomId; // 念のため再度取得
+                    assignedRoomId = data.roomId; 
                     updateAnimalDisplay(currentAnimalId);
                     showAnimalReveal(); // 動物公開画面へ遷移
                     break;
@@ -912,8 +1003,10 @@
                     animalReveal.style.display = "none";
                     mainContent.style.display = "none";
                     stopLoadingAnimation();
-                    assignedRoomId = null; // 部屋IDをリセット
-                    gameState = "room_selection";
+                    assignedRoomId = null; 
+                    userId = null; // エラー時はuserIdもリセットして、新しいセッションでやり直せるようにする
+                    localStorage.removeItem(SESSION_ID_KEY); // 無効なセッションIDをクリア
+                    sessionId = null;
                     break;
             }
         }
@@ -953,25 +1046,28 @@
             mainContent.style.display = "block";
             countdownTimer.style.display = "none";
             
-            if (socket && socket.readyState === WebSocket.OPEN) {
+            // サーバーに準備完了を通知
+            if (socket && socket.readyState === WebSocket.OPEN && userId && assignedRoomId) {
                 socket.send(JSON.stringify({
                     type: "ready_for_game",
                     userId: userId,
                     roomId: assignedRoomId
                 }));
+            } else {
+                console.warn("準備完了メッセージを送信できません。WebSocketまたはユーザー情報が不正です。");
+                // エラー処理または再接続を促す
             }
 
             statusMessage.style.display = "block";
             startLoadingAnimation(statusMessage, "他のユーザーを待っています");
             headline.style.display = "none";
             cardContainer.style.display = "none";
-
             playersInfo.style.display = "block";
         }
 
         // プレイヤー表示更新
         function updatePlayersDisplay() {
-            const count = Object.keys(players).length;
+            const count = Object.keys(players).filter(pId => players[pId].status !== "disconnected").length; // 接続中のプレイヤー数のみカウント
             playerCount.textContent = count;
             
             playersList.innerHTML = "";
@@ -984,8 +1080,8 @@
                 statusDiv.className = `player-status ${player.status}`;
                 
                 const nameDiv = document.createElement("div");
-                const isMe = (player.userId === userId) ? " (あなた)" : "";
-                nameDiv.textContent = `${animals[player.animalId]?.name || "未定"} (プレイヤー${player.userId.split('_')[1]})${isMe}`;
+                const isMe = (playerId === userId) ? " (あなた)" : ""; // 自分のユーザーIDと比較
+                nameDiv.textContent = `${animals[player.animalId]?.name || "未定"} (プレイヤー${playerId.split('_')[1]})${isMe}`;
                 
                 playerDiv.appendChild(statusDiv);
                 playerDiv.appendChild(nameDiv);
@@ -1059,7 +1155,7 @@
 
         // アクション送信
         function send(actionId) {
-            if (socket && socket.readyState === WebSocket.OPEN) {
+            if (socket && socket.readyState === WebSocket.OPEN && userId && assignedRoomId) { // userIdとroomIdを確認
                 const message = JSON.stringify({ 
                     type: "action",
                     userId: userId,
@@ -1070,7 +1166,7 @@
                 socket.send(message);
                 console.log("📤 送信:", message);
             } else {
-                console.warn("⛔ WebSocketが未接続。再接続を試みます...");
+                console.warn("⛔ WebSocketが未接続、またはユーザー情報が不正です。再接続を試みます...");
                 connectWebSocket();
             }
         }
@@ -1084,15 +1180,16 @@
         // アクション確定
         function confirmAction() {
             if (selectedActionId !== null) {
+                // 自分の選択肢ボタンを無効化
                 document.querySelectorAll('.card-button').forEach(btn => {
                     btn.classList.add('disabled');
                 });
-
+                
                 headline.textContent = "他のユーザーを待っています...";
                 startLoadingAnimation(statusMessage, "他のユーザーを待っています");
-                cardContainer.style.display = "none";
-                statusMessage.style.display = "block";
-                countdownTimer.style.display = "none";
+                cardContainer.style.display = "none"; // 選択肢を非表示に
+                statusMessage.style.display = "block"; // 待機メッセージ表示
+                countdownTimer.style.display = "none"; // カウントダウンも非表示に
 
                 send(selectedActionId);
                 confirmationModal.style.display = "none";
@@ -1109,7 +1206,8 @@
         // 初期化
         window.onload = () => {
             connectWebSocket(); // ページロード時にWebSocket接続を開始
-            roomSelectionScreen.style.display = "none"; // 初期は部屋選択画面も非表示
+            // connectWebSocket() 内で UI の初期表示を制御するので、ここでは何も表示しない
+            roomSelectionScreen.style.display = "none"; 
             animalReveal.style.display = "none";
             mainContent.style.display = "none";
             connectionStatus.style.display = "block"; // 接続中メッセージは表示
@@ -1117,7 +1215,8 @@
         
         window.onbeforeunload = () => {
             if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.close(1000, "User closed the page");
+                // 正常終了コードで切断し、セッションを再利用可能にする
+                socket.close(1000, "User closed the page"); 
             }
             stopLoadingAnimation();
         };
