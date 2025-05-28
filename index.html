@@ -1,86 +1,65 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>選択肢カード</title>
-  <style>
-    .card-container {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      padding: 2em;
-      gap: 1.5em;
-    }
-
-    .card {
-      border: 2px solid #007BFF;
-      border-radius: 12px;
-      padding: 1em 2em;
-      text-align: center;
-      cursor: pointer;
-      background-color: #F0F8FF;
-      transition: transform 0.2s, background-color 0.3s;
-      font-size: 1.2em;
-    }
-
-    .card:hover {
-      background-color: #E0F0FF;
-      transform: scale(1.05);
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <title>動物ボタン</title>
 </head>
 <body>
-  <div class="card-container" id="cardContainer">
-    <div class="card" onclick="handleChoice('餌を与える')">餌を与える</div>
-    <div class="card" onclick="handleChoice('掃除する')">掃除する</div>
-    <div class="card" onclick="handleChoice('遊ぶ')">遊ぶ</div>
-    <div class="card" onclick="handleChoice('様子を見る')">様子を見る</div>
-  </div>
+  <h1>動物ボタンでAWS WebSocket通信</h1>
+  <button onclick="send(1)">カバ</button>
+  <button onclick="send(2)">ウサギ</button>
+  <button onclick="send(3)">モモンガ</button>
+  <button onclick="send(4)">ニホンザル</button>
 
   <script>
-    const socket = new WebSocket("ws://3.106.192.121");
-    let animalId = null;
+    // ✅ WebSocketサーバーのURL（SSL対応済なら "wss://" を使う）
+    const WS_URL = "wss://ws.dcsaitolab.com";
 
-    socket.onopen = () => {
-      console.log("WebSocket 接続成功");
-      // 接続後すぐにanimalIdをリクエスト
-      socket.send(JSON.stringify({ type: "getAnimalId" }));
-    };
+    // ✅ グローバルな WebSocket 変数（1回だけ定義）
+    let socket;
 
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    function connectWebSocket() {
+      socket = new WebSocket(WS_URL);
 
-      if (data.type === "animalId") {
-        animalId = data.animalId;
-        console.log("取得した animalId:", animalId);
-      }
-
-      if (data.type === "stateUpdate") {
-        const { animalId: updatedId, state } = data;
-        localStorage.setItem(`animalState_${updatedId}`, JSON.stringify(state));
-        console.log(`状態更新: ID=${updatedId}, state=${JSON.stringify(state)}`);
-      }
-    };
-
-    socket.onclose = () => {
-      console.log("WebSocket 接続終了");
-    };
-
-    function handleChoice(choice) {
-      if (!animalId) {
-        alert("動物IDが未取得です。通信状況を確認してください。");
-        return;
-      }
-
-      const message = {
-        type: "choice",
-        animalId,
-        choice
+      socket.onopen = () => {
+        console.log("✅ WebSocket接続完了");
       };
 
-      socket.send(JSON.stringify(message));
-      console.log("送信:", message);
+      socket.onerror = (error) => {
+        console.error("❌ WebSocketエラー:", error);
+      };
+
+      socket.onmessage = (event) => {
+        console.log("📩 サーバーから受信:", event.data);
+      };
+
+      socket.onclose = (event) => {
+        console.warn("⚠️ WebSocket接続が閉じられました。コード:", event.code, "理由:", event.reason);
+      };
     }
+
+    function send(value) {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(value.toString());
+        console.log("📤 送信:", value);
+      } else {
+        console.warn("⛔ WebSocketが未接続。再接続を試みます...");
+        connectWebSocket();
+        // ※再接続後すぐには送れないので、遅延送信などが必要になる
+      }
+    }
+
+    // ページ読み込み時に接続
+    window.onload = () => {
+      connectWebSocket();
+    };
+
+    // ページ離脱時に切断
+    window.onbeforeunload = () => {
+      if (socket) {
+        socket.close();
+      }
+    };
   </script>
 </body>
 </html>
