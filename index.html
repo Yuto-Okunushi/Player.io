@@ -14,7 +14,8 @@
   <script>
     // WebSocketサーバーのURL（ws:// か wss://を適宜変更してください）
     // ※SSL証明書を設定していなければws://、設定済みならwss://にしてください
-    const WS_URL = "wss://ec2-3-27-119-133.ap-northeast-1.compute.amazonaws.com:8080";
+    const socket = new WebSocket("wss://ec2-3-27-119-133.ap-northeast-1.compute.amazonaws.com:8080");
+
 
     let socket;
 
