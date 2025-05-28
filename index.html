@@ -12,12 +12,13 @@
   <button onclick="send(4)">ニホンザル</button>
 
   <script>
-    // ✅ WebSocketサーバーのURL（SSL対応済なら "wss://" を使う）
+    // ✅ WebSocketサーバーのURL（Nginx経由、SSL対応済み）
     const WS_URL = "wss://ws.dcsaitolab.com";
 
-    // ✅ グローバルな WebSocket 変数（1回だけ定義）
+    // ✅ グローバルな WebSocket 変数
     let socket;
 
+    // WebSocket接続処理
     function connectWebSocket() {
       socket = new WebSocket(WS_URL);
 
@@ -38,6 +39,7 @@
       };
     }
 
+    // データ送信関数
     function send(value) {
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(value.toString());
@@ -45,7 +47,7 @@
       } else {
         console.warn("⛔ WebSocketが未接続。再接続を試みます...");
         connectWebSocket();
-        // ※再接続後すぐには送れないので、遅延送信などが必要になる
+        // 送信は再接続後に別途行う必要あり（即送信は不可）
       }
     }
 
