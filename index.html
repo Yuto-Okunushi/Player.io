@@ -12,51 +12,49 @@
   <button onclick="send(4)">ニホンザル</button>
 
   <script>
-    // WebSocketサーバーのURL（ws:// か wss://を適宜変更してください）
-    // ※SSL証明書を設定していなければws://、設定済みならwss://にしてください
-    const socket = new WebSocket("wss://ec2-3-27-119-133.ap-northeast-1.compute.amazonaws.com:8080");
+    // ✅ WebSocketサーバーのURL（SSL対応済なら "wss://" を使う）
+    const WS_URL = "wss://ec2-3-27-119-133.ap-northeast-1.compute.amazonaws.com:8080";
 
-
+    // ✅ グローバルな WebSocket 変数（1回だけ定義）
     let socket;
 
     function connectWebSocket() {
       socket = new WebSocket(WS_URL);
 
       socket.onopen = () => {
-        console.log("WebSocket接続完了");
+        console.log("✅ WebSocket接続完了");
       };
 
       socket.onerror = (error) => {
-        console.error("WebSocketエラー:", error);
+        console.error("❌ WebSocketエラー:", error);
       };
 
       socket.onmessage = (event) => {
-        console.log("サーバーから受信:", event.data);
+        console.log("📩 サーバーから受信:", event.data);
       };
 
       socket.onclose = (event) => {
-        console.warn("WebSocket接続が閉じられました。コード:", event.code, "理由:", event.reason);
-        // 必要なら再接続処理をここに書く
+        console.warn("⚠️ WebSocket接続が閉じられました。コード:", event.code, "理由:", event.reason);
       };
     }
 
     function send(value) {
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(value.toString());
-        console.log("送信:", value);
+        console.log("📤 送信:", value);
       } else {
-        console.warn("WebSocketが接続されていません。再接続を試みます...");
+        console.warn("⛔ WebSocketが未接続。再接続を試みます...");
         connectWebSocket();
-        // 再接続後に送信する場合はタイミングをずらす必要があります（ここでは省略）
+        // ※再接続後すぐには送れないので、遅延送信などが必要になる
       }
     }
 
-    // ページ読み込み時にWebSocket接続開始
+    // ページ読み込み時に接続
     window.onload = () => {
       connectWebSocket();
     };
 
-    // ページ離脱時にWebSocketを閉じる
+    // ページ離脱時に切断
     window.onbeforeunload = () => {
       if (socket) {
         socket.close();
