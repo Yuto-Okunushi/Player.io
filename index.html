@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>動物議論ゲーム</title>
     <style>
+        /* 既存のCSSはそのまま */
         body {
             margin: 0;
             padding: 0;
@@ -85,7 +86,7 @@
             border-radius: 12px;
             max-width: 90vw;
             user-select: none;
-            display: none;
+            display: none; /* 初期は非表示 */
         }
 
         .animal-reveal .top-text {
@@ -154,7 +155,7 @@
 
         /* メイン画面のスタイル */
         .main-content {
-            display: none;
+            display: none; /* 初期は非表示 */
             width: 100%;
             height: 100%;
             position: relative;
@@ -421,7 +422,7 @@
             width: 20px;
         }
 
-        /* 接続待機画面 */
+        /* 接続待機画面 (部屋ID入力を含む) */
         .waiting-screen {
             position: absolute;
             top: 50%;
@@ -432,7 +433,45 @@
             text-shadow: 0 0 5px #4b463e;
             text-align: center;
             z-index: 10;
+            display: flex; /* Flexboxに変更して要素を中央に配置しやすくする */
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
+
+        .room-input-area {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .room-input-area input {
+            padding: 10px;
+            font-size: 1.2rem;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            width: 250px; /* 少し広めに */
+            max-width: 80vw;
+            text-align: center;
+        }
+
+        .room-input-area button {
+            padding: 10px 20px;
+            font-size: 1.2rem;
+            background: #88b04b;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .room-input-area button:hover {
+            background: #6b8f39;
+        }
+
 
         /* カウントダウン表示 */
         .countdown-timer {
@@ -459,7 +498,11 @@
     </div>
 
     <div id="waiting-screen" class="waiting-screen">
-        サーバーに接続中<span class="loading-dots">...</span>
+        <p id="waiting-message">サーバーに接続中<span class="loading-dots">...</span></p>
+        <div id="room-input-area" class="room-input-area" style="display: none;">
+            <input type="text" id="roomIdInput" placeholder="部屋IDを入力">
+            <button id="joinRoomButton">部屋に参加</button>
+        </div>
     </div>
 
     <div class="animal-reveal" id="animalReveal">
@@ -528,9 +571,9 @@
         let socket;
         let userId = null;
         let currentAnimalId = null;
-        let assignedRoomId = null; // 新しく追加: 所属する部屋ID
+        let assignedRoomId = null; // 所属する部屋ID
         let selectedActionId = null;
-        let gameState = "waiting"; // waiting, reveal, main, discussion
+        let gameState = "initial"; // initial, connecting, waiting_room, reveal, waiting_for_players_ready, main, discussion
 
         // 動物データ
         const animals = {
@@ -546,6 +589,11 @@
         // DOM要素の取得
         const connectionStatus = document.getElementById("connection-status");
         const waitingScreen = document.getElementById("waiting-screen");
+        const waitingMessage = document.getElementById("waiting-message"); // 追加
+        const roomInputArea = document.getElementById("room-input-area"); // 追加
+        const roomIdInput = document.getElementById("roomIdInput"); // 追加
+        const joinRoomButton = document.getElementById("joinRoomButton"); // 追加
+
         const animalReveal = document.getElementById("animalReveal");
         const mainContent = document.getElementById("mainContent");
         const statusMessage = document.getElementById("status-message");
@@ -561,7 +609,7 @@
 
         // ローディングアニメーション
         let dotState = 0;
-        let loadingText = "接続中";
+        let loadingText = ""; // 汎用的に使用するため初期値なし
         let statusMessageInterval;
 
         function startLoadingAnimation(element, initialText) {
@@ -585,30 +633,29 @@
 
         // WebSocket接続
         function connectWebSocket() {
+            gameState = "connecting";
             try {
                 socket = new WebSocket(WS_URL);
                 startLoadingAnimation(connectionStatus, "接続中");
-                startLoadingAnimation(waitingScreen, "サーバーに接続中");
+                startLoadingAnimation(waitingMessage, "サーバーに接続中");
+                roomInputArea.style.display = "none"; // 接続中は入力エリアを非表示に
 
                 socket.onopen = () => {
                     console.log("✅ WebSocket接続完了");
                     connectionStatus.textContent = "接続済み";
                     connectionStatus.className = "connection-status status-connected";
-                    waitingScreen.textContent = "動物の割り当てとプレイヤーを待機中...";
-                    stopLoadingAnimation(); // 接続完了でロードアニメーション停止
-                    
-                    // 参加リクエストを送信 (サーバーは自動で部屋に割り当てる)
-                    socket.send(JSON.stringify({
-                        type: "join",
-                        timestamp: Date.now()
-                    }));
+                    waitingMessage.textContent = "部屋IDを入力して参加してください";
+                    roomInputArea.style.display = "flex"; // 接続完了したら入力エリアを表示
+                    stopLoadingAnimation();
+                    gameState = "waiting_room";
                 };
 
                 socket.onerror = (error) => {
                     console.error("❌ WebSocketエラー:", error);
                     connectionStatus.textContent = "接続エラー";
                     connectionStatus.className = "connection-status status-disconnected";
-                    waitingScreen.textContent = "接続エラーが発生しました";
+                    waitingMessage.textContent = "接続エラーが発生しました。再接続を試みます...";
+                    roomInputArea.style.display = "none"; // エラー時は入力エリア非表示
                     stopLoadingAnimation();
                 };
 
@@ -618,45 +665,76 @@
                         handleServerMessage(data);
                     } catch (e) {
                         console.log("📩 テキストメッセージ受信 (非推奨):", event.data);
-                        // 古いメッセージ形式のハンドリングは削除または最小限に
-                        // handleLegacyMessage(event.data); // 必要なければ削除
                     }
                 };
 
+                // 再接続処理を強化 (クライアント側の再ロードを避けるため)
                 socket.onclose = (event) => {
                     console.warn("⚠️ WebSocket接続が閉じられました。コード:", event.code, "理由:", event.reason);
                     connectionStatus.textContent = "接続切断";
                     connectionStatus.className = "connection-status status-disconnected";
-                    waitingScreen.textContent = "サーバーとの接続が切断されました。再接続を試みます...";
                     
-                    // 再接続を試行
-                    setTimeout(() => {
-                        if (socket.readyState === WebSocket.CLOSED) {
-                            connectWebSocket();
-                        }
-                    }, 3000);
+                    // ユーザーが意図的にページを閉じた場合を除き、自動再接続
+                    // event.code === 1000 は正常終了
+                    if (event.code !== 1000 && !event.wasClean) {
+                        waitingMessage.textContent = "サーバーとの接続が切断されました。再接続を試みます...";
+                        roomInputArea.style.display = "none";
+                        stopLoadingAnimation();
+                        setTimeout(connectWebSocket, 3000); // 3秒後に再接続を試行
+                    } else if (event.code === 1000) {
+                        // 正常終了の場合は何もしないか、終了メッセージを表示
+                        waitingMessage.textContent = "セッションが終了しました。";
+                        roomInputArea.style.display = "flex"; // 新しい部屋に参加できるようにする
+                        stopLoadingAnimation();
+                    }
                 };
 
             } catch (error) {
                 console.error("WebSocket接続失敗:", error);
                 connectionStatus.textContent = "接続失敗";
                 connectionStatus.className = "connection-status status-disconnected";
-                waitingScreen.textContent = "接続に失敗しました";
+                waitingMessage.textContent = "接続に失敗しました";
+                roomInputArea.style.display = "none"; // 接続失敗時は入力エリア非表示
                 stopLoadingAnimation();
             }
         }
+
+        // 部屋参加ボタンのイベントリスナー
+        joinRoomButton.addEventListener("click", () => {
+            const roomId = roomIdInput.value.trim();
+            if (roomId) {
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    assignedRoomId = roomId; // ここで部屋IDを保持
+                    socket.send(JSON.stringify({
+                        type: "join_room", // 新しいメッセージタイプ
+                        roomId: roomId,
+                        timestamp: Date.now()
+                    }));
+                    waitingMessage.textContent = `部屋 ${roomId} に参加中...`;
+                    roomInputArea.style.display = "none";
+                    startLoadingAnimation(waitingMessage, `部屋 ${roomId} に参加中`);
+                    gameState = "waiting_players"; // プレイヤー待ち状態
+                } else {
+                    alert("WebSocketが接続されていません。再接続を試みます。");
+                    connectWebSocket(); // 再接続を試みる
+                }
+            } else {
+                alert("部屋IDを入力してください。");
+            }
+        });
+
 
         // サーバーメッセージハンドラー
         function handleServerMessage(data) {
             console.log("📩 サーバーメッセージ:", data);
 
             switch (data.type) {
-                case "user_assigned":
+                case "user_assigned": // サーバーからプレイヤー全員が揃った後、動物が割り振られた通知
                     userId = data.userId;
                     currentAnimalId = data.animalId;
-                    assignedRoomId = data.roomId; // 部屋IDを保存
+                    assignedRoomId = data.roomId; // 念のため再度取得
                     updateAnimalDisplay(currentAnimalId);
-                    showAnimalReveal();
+                    showAnimalReveal(); // 動物公開画面へ遷移
                     break;
 
                 case "players_update":
@@ -665,11 +743,8 @@
                     break;
 
                 case "game_start":
-                    // サーバー側で動物公開後、アクション選択フェーズに自動で進むようにしたため、このメッセージは不要になる可能性あり
-                    // 必要であれば、アニメーションのトリガーなどとして使用
-                    // if (gameState === "main") {
-                    //     startGameplay();
-                    // }
+                    // サーバーからのゲーム開始通知 (ここでは直接メイン画面には遷移させない)
+                    console.log("ゲーム開始シグナルを受信しましたが、動物公開後に手動で遷移します。");
                     break;
 
                 case "game_phase":
@@ -683,19 +758,21 @@
                 case "waiting_for_actions":
                     headline.textContent = "他のユーザーを待っています...";
                     startLoadingAnimation(statusMessage, "他のユーザーを待っています");
-                    cardContainer.style.display = "none"; // 選択肢を非表示に
+                    cardContainer.style.display = "none";
                     statusMessage.style.display = "block";
-                    break;
-
-                case "game_reset":
-                    // 誰かが切断した場合のゲームリセット処理
-                    alert(data.message || "ゲームがリセットされました。");
-                    location.reload(); // ページをリロードして最初からやり直す
                     break;
 
                 case "error":
                     console.error("サーバーエラー:", data.message);
                     alert("エラー: " + data.message);
+                    // エラー発生時は部屋ID入力画面に戻る
+                    waitingScreen.style.display = "flex";
+                    waitingMessage.textContent = "エラーが発生しました。部屋IDを再入力してください。";
+                    roomInputArea.style.display = "flex";
+                    animalReveal.style.display = "none";
+                    mainContent.style.display = "none";
+                    stopLoadingAnimation();
+                    gameState = "waiting_room";
                     break;
             }
         }
@@ -722,9 +799,9 @@
         // 動物決定画面を表示し、アニメーションを開始
         function showAnimalReveal() {
             gameState = "reveal";
-            waitingScreen.style.display = "none";
-            animalReveal.style.display = "block";
-            mainContent.style.display = "none";
+            waitingScreen.style.display = "none"; // 待機画面を非表示
+            animalReveal.style.display = "block"; // 動物公開画面を表示
+            mainContent.style.display = "none"; // メインコンテンツを非表示
             
             // アニメーション開始
             setTimeout(() => {
@@ -732,26 +809,30 @@
             }, 500);
         }
 
-        // メインゲーム画面に切り替え
+        // メインゲーム画面に切り替え (OKボタンが押された後)
         function startMainGame() {
-            gameState = "main";
-            animalReveal.style.display = "none";
-            mainContent.style.display = "block";
+            gameState = "waiting_for_players_ready"; // 新しい状態に設定
+            animalReveal.style.display = "none"; // 動物公開画面を非表示
+            mainContent.style.display = "block"; // メインコンテンツを表示
             countdownTimer.style.display = "none"; // カウントダウンはフェーズ開始時に表示
             
             // サーバーに準備完了を通知
             if (socket && socket.readyState === WebSocket.OPEN) {
                 socket.send(JSON.stringify({
-                    type: "ready",
+                    type: "ready_for_game", // サーバーに準備完了を伝える
                     userId: userId,
-                    roomId: assignedRoomId // 部屋IDを送信
+                    roomId: assignedRoomId
                 }));
             }
-            // プレイヤーを待機中のメッセージ
+
+            // 「他のユーザーを待っています」メッセージを表示
             statusMessage.style.display = "block";
-            startLoadingAnimation(statusMessage, "他のプレイヤーの準備を待機中");
-            headline.style.display = "none"; // ヘッドラインは非表示に
-            cardContainer.style.display = "none"; // カードは非表示に
+            startLoadingAnimation(statusMessage, "他のユーザーを待っています"); // ここを変更
+            headline.style.display = "none"; // ヘッドラインは非表示
+            cardContainer.style.display = "none"; // カードコンテナも非表示
+
+            // プレイヤー情報エリアを表示（任意：ここで表示する）
+            playersInfo.style.display = "block";
         }
 
         // プレイヤー表示更新
@@ -766,11 +847,9 @@
                 playerDiv.className = "player-item";
                 
                 const statusDiv = document.createElement("div");
-                // サーバーから送られてくるstatusに基づいてCSSクラスを適用
                 statusDiv.className = `player-status ${player.status}`;
                 
                 const nameDiv = document.createElement("div");
-                // 自分のプレイヤーには「(あなた)」を付加
                 const isMe = (player.userId === userId) ? " (あなた)" : "";
                 nameDiv.textContent = `${animals[player.animalId]?.name || "未定"} (プレイヤー${player.userId.split('_')[1]})${isMe}`;
                 
@@ -780,64 +859,66 @@
             }
         }
 
-        // ゲームプレイ開始 (アクション選択フェーズ)
-        function startGameplay() {
-            cardContainer.style.display = "flex";
-            statusMessage.style.display = "none"; // 待機メッセージを非表示に
-            stopLoadingAnimation(); // 念のためロードアニメーション停止
-            headline.style.display = "block";
-            headline.textContent = "議論で何をする？";
-            
-            document.querySelectorAll('.card-button').forEach(btn => {
-                btn.classList.remove('disabled'); // ボタンを有効化
-            });
-        }
-
         // ゲームフェーズ処理
         function handleGamePhase(phase, data) {
             console.log(`フェーズ変更: ${phase}`, data);
             switch (phase) {
                 case "discussion":
-                    stopLoadingAnimation(); // ロードアニメーション停止
+                    stopLoadingAnimation();
                     headline.textContent = "議論中";
                     headline.style.display = "block";
                     cardContainer.style.display = "none";
-                    statusMessage.style.display = "none"; // 待機メッセージを非表示に
-                    countdownTimer.style.display = "none"; // カウントダウン非表示
+                    statusMessage.style.display = "none";
+                    countdownTimer.style.display = "none";
                     break;
                     
-                case "waiting": // ストーリー進行中など、プレイヤーが操作しない待機フェーズ
-                    stopLoadingAnimation(); // ロードアニメーション停止
+                case "story_progress": // 新しいフェーズ: ストーリー進行中
+                    stopLoadingAnimation();
                     headline.textContent = "ストーリー進行中";
                     headline.style.display = "block";
                     cardContainer.style.display = "none";
-                    statusMessage.style.display = "none"; // 待機メッセージを非表示に
-                    countdownTimer.style.display = "none"; // カウントダウン非表示
+                    statusMessage.style.display = "none";
+                    countdownTimer.style.display = "none";
                     break;
                     
                 case "action_select":
-                    startGameplay(); // アクション選択UIを表示
-                    countdownTimer.style.display = "block"; // カウントダウン表示
+                    // メインゲーム画面が表示されていることを確認してからアクション選択UIを表示
+                    if (gameState === "waiting_for_players_ready" || gameState === "main") { // readiness確認後も遷移できるように
+                        startGameplay(); // アクション選択UIを表示
+                        countdownTimer.style.display = "block"; // カウントダウン表示
+                    }
                     break;
             }
+        }
+
+        // ゲームプレイ開始 (アクション選択フェーズ)
+        function startGameplay() {
+            cardContainer.style.display = "flex";
+            statusMessage.style.display = "none";
+            stopLoadingAnimation();
+            headline.style.display = "block";
+            headline.textContent = "議論で何をする？";
+            
+            document.querySelectorAll('.card-button').forEach(btn => {
+                btn.classList.remove('disabled');
+            });
         }
 
         // カウントダウン表示を更新
         function updateCountdownDisplay(time) {
             countdownTime.textContent = time;
-            if (time <= 5 && time > 0) { // 例: 残り5秒で色を変えるなど
+            if (time <= 5 && time > 0) {
                 countdownTime.style.color = "red";
             } else {
                 countdownTime.style.color = "white";
             }
             if (time <= 0) {
-                // 時間切れの場合、自分のボタンを無効化
                 document.querySelectorAll('.card-button').forEach(btn => {
                     btn.classList.add('disabled');
                 });
                 headline.textContent = "時間が終了しました。他のユーザーのアクションを待っています...";
                 startLoadingAnimation(statusMessage, "他のユーザーのアクションを待っています");
-                cardContainer.style.display = "none"; // 選択肢を非表示に
+                cardContainer.style.display = "none";
                 statusMessage.style.display = "block";
             }
         }
@@ -848,7 +929,7 @@
                 const message = JSON.stringify({ 
                     type: "action",
                     userId: userId,
-                    roomId: assignedRoomId, // 部屋IDを送信
+                    roomId: assignedRoomId,
                     actionId: actionId,
                     timestamp: Date.now()
                 });
@@ -869,18 +950,16 @@
         // アクション確定
         function confirmAction() {
             if (selectedActionId !== null) {
-                // 自分の選択肢ボタンを無効化
                 document.querySelectorAll('.card-button').forEach(btn => {
                     if (parseInt(btn.dataset.actionId) !== selectedActionId) {
-                        btn.classList.add('disabled'); // 他の選択肢を無効化
+                        btn.classList.add('disabled');
                     }
                 });
-                // 選択したボタンのみ強調表示するなら、CSSで制御
 
                 headline.textContent = "他のユーザーを待っています...";
                 startLoadingAnimation(statusMessage, "他のユーザーを待っています");
-                cardContainer.style.display = "none"; // 選択肢を非表示に
-                statusMessage.style.display = "block"; // 待機メッセージ表示
+                cardContainer.style.display = "none";
+                statusMessage.style.display = "block";
 
                 send(selectedActionId);
                 confirmationModal.style.display = "none";
@@ -896,12 +975,14 @@
 
         // 初期化
         window.onload = () => {
-            connectWebSocket();
+            connectWebSocket(); // ページロード時にWebSocket接続を開始
         };
 
+        // ページを閉じる際のWebSocket切断 (再ロードを避けるため onbeforeunload を変更)
         window.onbeforeunload = () => {
-            if (socket) {
-                socket.close();
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                // 正常終了コード1000を送信してサーバーに意図的な切断を通知
+                socket.close(1000, "User closed the page");
             }
             stopLoadingAnimation();
         };
