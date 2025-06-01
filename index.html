@@ -48,7 +48,7 @@
             cursor: not-allowed;
         }
 
-        .animal-reveal {
+        .animal-reveal, .room-ui {
             display: none;
             margin-top: 1rem;
         }
@@ -80,6 +80,10 @@
         <button id="createBtn" disabled>部屋を作成</button>
         <button id="joinBtn" disabled>部屋に参加</button>
 
+        <div class="room-ui" id="roomUI">
+            <p>ルームに入りました。ゲーム開始までお待ちください。</p>
+        </div>
+
         <div class="animal-reveal" id="animalReveal">
             <p>あなたは <span id="animalName">???</span> です</p>
             <img id="animalImage" class="animal-image" src="" alt="動物画像" />
@@ -99,6 +103,7 @@
 
         const createBtn = document.getElementById("createBtn");
         const joinBtn = document.getElementById("joinBtn");
+        const roomUI = document.getElementById("roomUI");
 
         let keepAliveInterval = null;
 
@@ -132,10 +137,12 @@
                 currentRoom = data.roomId;
                 status.textContent = `✅ 部屋を作成しました: ${data.roomId}`;
                 status.className = "success";
+                roomUI.style.display = "block";
             } else if (data.type === "room_joined") {
                 currentRoom = data.roomId;
                 status.textContent = `✅ 部屋に参加しました: ${data.roomId}`;
                 status.className = "success";
+                roomUI.style.display = "block";
             } else if (data.type === "user_assigned") {
                 showAnimalReveal(data.animalId);
             } else if (data.type === "error") {
