@@ -117,20 +117,26 @@
     <div class="status-message">接続中...</div>
 
     <script>
-        // 最低限の初期アニメーションと表示テスト
-        window.onload = () => {
+        // 必要なときに showAnimalReveal(animalId) を呼び出すこと
+        function showAnimalReveal(animalId) {
+            const animals = {
+                1: { name: "カバ", description: "水辺に住む大きな動物です。", image: "CH_kaba_ver001.png" },
+                2: { name: "ウサギ", description: "ぴょんぴょん跳ねる可愛い動物です。", image: "CH_usagi_ver001.png" },
+                3: { name: "モモンガ", description: "滑空する夜行性の動物です。", image: "CH_momonga_ver001.png" },
+                4: { name: "ニホンザル", description: "温泉に入ることで有名です。", image: "CH_saru_ver001.png" },
+            };
+
+            const animal = animals[animalId];
+            if (!animal) return;
+
+            document.getElementById("animalName").textContent = animal.name;
+            document.getElementById("animalDescription").textContent = animal.description;
+            document.getElementById("animalImage").src = animal.image;
+
             const reveal = document.getElementById("animalReveal");
-            const name = document.getElementById("animalName");
-            const desc = document.getElementById("animalDescription");
-            const img = document.getElementById("animalImage");
-
-            name.textContent = "ウサギ";
-            desc.textContent = "ぴょんぴょん跳ねる可愛い動物です。";
-            img.src = "CH_usagi_ver001.png";
-
             reveal.style.display = "block";
             setTimeout(() => reveal.classList.add("show"), 200);
-        };
+        }
     </script>
 </body>
 </html>
