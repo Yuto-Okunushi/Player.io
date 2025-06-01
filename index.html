@@ -13,96 +13,78 @@
             background-position: center;
             background-repeat: no-repeat;
             font-family: sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
         }
 
-        .animal-reveal {
-            text-align: center;
-            color: white;
-            position: absolute;
-            top: 20vh;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.3);
-            padding: 1rem 2rem;
-            border-radius: 12px;
-            max-width: 90vw;
-            display: none;
-        }
-
-        .animal-reveal .top-text {
-            font-size: 2rem;
-            margin-bottom: 1vh;
-        }
-
-        .animal-reveal .animal-name {
-            font-size: 2.5rem;
-            font-weight: bold;
-        }
-
-        .animal-reveal .animal-desc {
-            font-size: 2rem;
-            margin-top: 1vh;
-        }
-
-        .animal-reveal .animal-image {
-            width: 50vw;
-            max-width: 220px;
-            margin-top: 2vh;
-        }
-
-        .ok-button {
-            margin-top: 3vh;
-            font-size: 1.5rem;
-            padding: 0.7rem 2rem;
-            background: #88b04b;
-            color: white;
-            border: none;
+        .container {
+            max-width: 480px;
+            margin: 2rem auto;
+            background: rgba(0,0,0,0.6);
+            padding: 1rem;
             border-radius: 10px;
+            color: white;
+            text-align: center;
+        }
+
+        input, button {
+            font-size: 1rem;
+            padding: 0.5rem;
+            margin: 0.5rem 0;
+            border-radius: 5px;
+            border: none;
+        }
+
+        button {
+            background-color: #88b04b;
+            color: white;
             cursor: pointer;
         }
 
-        .ok-button:hover {
-            background: #6b8f39;
+        button:hover {
+            background-color: #6b8f39;
+        }
+
+        .animal-reveal {
+            display: none;
+            margin-top: 1rem;
+        }
+
+        .animal-image {
+            width: 50%;
+            max-width: 200px;
         }
 
         .status-message {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            font-size: 1.8rem;
-            text-shadow: 0 0 5px #4b463e;
-            white-space: nowrap;
+            margin-top: 1rem;
+            color: #f0f0f0;
         }
     </style>
 </head>
 <body>
-    <div class="animal-reveal" id="animalReveal">
-        <div class="top-text">あなたは</div>
-        <div class="animal-name" id="animalName">???</div>
-        <div class="top-text">です</div>
-        <img id="animalImage" class="animal-image" src="" alt="動物画像">
-        <div class="animal-desc" id="animalDescription">説明が入ります。</div>
-        <button class="ok-button" id="okButton">OK</button>
-    </div>
+    <div class="container">
+        <h2>動物議論ゲーム</h2>
+        <input type="text" id="roomId" placeholder="部屋IDを入力" />
+        <button onclick="createRoom()">部屋を作成</button>
+        <button onclick="joinRoom()">部屋に参加</button>
 
-    <div class="status-message">接続中...</div>
+        <div class="animal-reveal" id="animalReveal">
+            <p>あなたは <span id="animalName">???</span> です</p>
+            <img id="animalImage" class="animal-image" src="" alt="動物画像" />
+            <p id="animalDescription">説明が入ります。</p>
+            <button onclick="acknowledgeAnimal()">OK</button>
+        </div>
+
+        <div class="status-message" id="status">接続中...</div>
+    </div>
 
     <script>
         const WS_URL = "wss://ws.dcsaitolab.com";
         const socket = new WebSocket(WS_URL);
+        let sessionId = Math.random().toString(36).substring(2, 10);
+        let userId = null;
+        let currentRoom = null;
 
         socket.onopen = () => {
-            console.log("サーバーに接続しました");
-            document.querySelector(".status-message").textContent = "接続成功！";
-
-            const sessionId = Math.random().toString(36).substring(2, 10);
+            document.getElementById("status").textContent = "接続成功";
             socket.send(JSON.stringify({
                 type: "init_session",
                 sessionId: sessionId
@@ -111,28 +93,54 @@
 
         socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
+            console.log("受信:", data);
 
-            if (data.type === "user_assigned") {
+            if (data.type === "session_initialized") {
+                userId = data.userId;
+            } else if (data.type === "room_created") {
+                currentRoom = data.roomId;
+                document.getElementById("status").textContent = `部屋を作成しました: ${data.roomId}`;
+            } else if (data.type === "room_joined") {
+                currentRoom = data.roomId;
+                document.getElementById("status").textContent = `部屋に参加しました: ${data.roomId}`;
+            } else if (data.type === "user_assigned") {
                 showAnimalReveal(data.animalId);
             }
         };
 
-        socket.onerror = (error) => {
-            console.error("WebSocket エラー:", error);
-            document.querySelector(".status-message").textContent = "接続エラーが発生しました";
+        socket.onerror = (err) => {
+            document.getElementById("status").textContent = "接続エラー";
+            console.error("WebSocket エラー", err);
         };
 
-        socket.onclose = () => {
-            console.log("サーバーとの接続が切断されました");
-            document.querySelector(".status-message").textContent = "切断されました";
-        };
+        function createRoom() {
+            const roomId = document.getElementById("roomId").value.trim();
+            if (roomId) {
+                socket.send(JSON.stringify({
+                    type: "create_room",
+                    roomId: roomId,
+                    userId: userId
+                }));
+            }
+        }
+
+        function joinRoom() {
+            const roomId = document.getElementById("roomId").value.trim();
+            if (roomId) {
+                socket.send(JSON.stringify({
+                    type: "join_room",
+                    roomId: roomId,
+                    userId: userId
+                }));
+            }
+        }
 
         function showAnimalReveal(animalId) {
             const animals = {
                 1: { name: "カバ", description: "水辺に住む大きな動物です。", image: "CH_kaba_ver001.png" },
                 2: { name: "ウサギ", description: "ぴょんぴょん跳ねる可愛い動物です。", image: "CH_usagi_ver001.png" },
                 3: { name: "モモンガ", description: "滑空する夜行性の動物です。", image: "CH_momonga_ver001.png" },
-                4: { name: "ニホンザル", description: "温泉に入ることで有名です。", image: "CH_saru_ver001.png" },
+                4: { name: "ニホンザル", description: "温泉に入ることで有名です。", image: "CH_saru_ver001.png" }
             };
 
             const animal = animals[animalId];
@@ -141,9 +149,11 @@
             document.getElementById("animalName").textContent = animal.name;
             document.getElementById("animalDescription").textContent = animal.description;
             document.getElementById("animalImage").src = animal.image;
+            document.getElementById("animalReveal").style.display = "block";
+        }
 
-            const reveal = document.getElementById("animalReveal");
-            reveal.style.display = "block";
+        function acknowledgeAnimal() {
+            document.getElementById("animalReveal").style.display = "none";
         }
     </script>
 </body>
