@@ -91,12 +91,21 @@
         const createBtn = document.getElementById("createBtn");
         const joinBtn = document.getElementById("joinBtn");
 
+        let keepAliveInterval = null;
+
         socket.onopen = () => {
             document.getElementById("status").textContent = "接続成功";
             socket.send(JSON.stringify({
                 type: "init_session",
                 sessionId: sessionId
             }));
+
+            // 定期的にpingを送信（30秒ごと）
+            keepAliveInterval = setInterval(() => {
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({ type: "ping" }));
+                }
+            }, 30000);
         };
 
         socket.onmessage = (event) => {
@@ -121,6 +130,11 @@
         socket.onerror = (err) => {
             document.getElementById("status").textContent = "接続エラー";
             console.error("WebSocket エラー", err);
+        };
+
+        socket.onclose = () => {
+            clearInterval(keepAliveInterval);
+            document.getElementById("status").textContent = "接続が切断されました";
         };
 
         createBtn.addEventListener("click", () => {
