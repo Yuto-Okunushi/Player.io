@@ -42,37 +42,17 @@
         .animal-reveal .animal-name {
             font-size: 2.5rem;
             font-weight: bold;
-            opacity: 0;
-            transform: translateY(20px);
-            transition: opacity 1s ease, transform 1s ease;
-        }
-
-        .animal-reveal.show .animal-name,
-        .animal-reveal.show .animal-image,
-        .animal-reveal.show .animal-desc,
-        .animal-reveal.show .ok-button {
-            opacity: 1;
-            transform: translateY(0);
         }
 
         .animal-reveal .animal-desc {
             font-size: 2rem;
             margin-top: 1vh;
-            opacity: 0;
-            transition: opacity 1s ease 0.5s, transform 1s ease 0.5s;
         }
 
         .animal-reveal .animal-image {
             width: 50vw;
             max-width: 220px;
             margin-top: 2vh;
-            opacity: 0;
-            animation: fadeIn 1.2s forwards 1s;
-        }
-
-        @keyframes fadeIn {
-            0% { transform: scale(0.8); opacity: 0; }
-            100% { transform: scale(1); opacity: 1; }
         }
 
         .ok-button {
@@ -84,8 +64,6 @@
             border: none;
             border-radius: 10px;
             cursor: pointer;
-            opacity: 0;
-            transition: opacity 1s ease 1.5s;
         }
 
         .ok-button:hover {
@@ -135,7 +113,6 @@
 
             const reveal = document.getElementById("animalReveal");
             reveal.style.display = "block";
-            setTimeout(() => reveal.classList.add("show"), 200);
         }
     </script>
 </body>
