@@ -39,8 +39,13 @@
             cursor: pointer;
         }
 
-        button:hover {
+        button:hover:enabled {
             background-color: #6b8f39;
+        }
+
+        button:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
         }
 
         .animal-reveal {
@@ -63,8 +68,8 @@
     <div class="container">
         <h2>動物議論ゲーム</h2>
         <input type="text" id="roomId" placeholder="部屋IDを入力" />
-        <button id="createBtn">部屋を作成</button>
-        <button id="joinBtn">部屋に参加</button>
+        <button id="createBtn" disabled>部屋を作成</button>
+        <button id="joinBtn" disabled>部屋に参加</button>
 
         <div class="animal-reveal" id="animalReveal">
             <p>あなたは <span id="animalName">???</span> です</p>
@@ -82,7 +87,9 @@
         let sessionId = Math.random().toString(36).substring(2, 10);
         let userId = null;
         let currentRoom = null;
-        let initialized = false;
+
+        const createBtn = document.getElementById("createBtn");
+        const joinBtn = document.getElementById("joinBtn");
 
         socket.onopen = () => {
             document.getElementById("status").textContent = "接続成功";
@@ -98,7 +105,8 @@
 
             if (data.type === "session_initialized") {
                 userId = data.userId;
-                initialized = true;
+                createBtn.disabled = false;
+                joinBtn.disabled = false;
             } else if (data.type === "room_created") {
                 currentRoom = data.roomId;
                 document.getElementById("status").textContent = `部屋を作成しました: ${data.roomId}`;
@@ -115,7 +123,7 @@
             console.error("WebSocket エラー", err);
         };
 
-        document.getElementById("createBtn").addEventListener("click", () => {
+        createBtn.addEventListener("click", () => {
             const roomId = document.getElementById("roomId").value.trim();
             if (roomId && userId) {
                 socket.send(JSON.stringify({
@@ -123,12 +131,10 @@
                     roomId: roomId,
                     userId: userId
                 }));
-            } else {
-                document.getElementById("status").textContent = "セッションが未初期化です。少し待ってから再試行してください。";
             }
         });
 
-        document.getElementById("joinBtn").addEventListener("click", () => {
+        joinBtn.addEventListener("click", () => {
             const roomId = document.getElementById("roomId").value.trim();
             if (roomId && userId) {
                 socket.send(JSON.stringify({
@@ -136,8 +142,6 @@
                     roomId: roomId,
                     userId: userId
                 }));
-            } else {
-                document.getElementById("status").textContent = "セッションが未初期化です。少し待ってから再試行してください。";
             }
         });
 
