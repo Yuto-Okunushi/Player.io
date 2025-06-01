@@ -60,7 +60,16 @@
 
         .status-message {
             margin-top: 1rem;
-            color: #f0f0f0;
+        }
+
+        .success {
+            color: #00ffcc;
+            font-weight: bold;
+        }
+
+        .error {
+            color: #ff6666;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -100,7 +109,6 @@
                 sessionId: sessionId
             }));
 
-            // 定期的にpingを送信（30秒ごと）
             keepAliveInterval = setInterval(() => {
                 if (socket.readyState === WebSocket.OPEN) {
                     socket.send(JSON.stringify({ type: "ping" }));
@@ -112,29 +120,42 @@
             const data = JSON.parse(event.data);
             console.log("受信:", data);
 
+            const status = document.getElementById("status");
+
             if (data.type === "session_initialized") {
                 userId = data.userId;
                 createBtn.disabled = false;
                 joinBtn.disabled = false;
+                status.textContent = "セッション初期化完了。部屋IDを入力してください。";
+                status.className = "success";
             } else if (data.type === "room_created") {
                 currentRoom = data.roomId;
-                document.getElementById("status").textContent = `部屋を作成しました: ${data.roomId}`;
+                status.textContent = `✅ 部屋を作成しました: ${data.roomId}`;
+                status.className = "success";
             } else if (data.type === "room_joined") {
                 currentRoom = data.roomId;
-                document.getElementById("status").textContent = `部屋に参加しました: ${data.roomId}`;
+                status.textContent = `✅ 部屋に参加しました: ${data.roomId}`;
+                status.className = "success";
             } else if (data.type === "user_assigned") {
                 showAnimalReveal(data.animalId);
+            } else if (data.type === "error") {
+                status.textContent = `⚠ エラー: ${data.message}`;
+                status.className = "error";
             }
         };
 
         socket.onerror = (err) => {
-            document.getElementById("status").textContent = "接続エラー";
+            const status = document.getElementById("status");
+            status.textContent = "接続エラー";
+            status.className = "error";
             console.error("WebSocket エラー", err);
         };
 
         socket.onclose = () => {
             clearInterval(keepAliveInterval);
-            document.getElementById("status").textContent = "接続が切断されました";
+            const status = document.getElementById("status");
+            status.textContent = "接続が切断されました";
+            status.className = "error";
         };
 
         createBtn.addEventListener("click", () => {
