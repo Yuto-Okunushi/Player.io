@@ -95,7 +95,37 @@
     <div class="status-message">接続中...</div>
 
     <script>
-        // 必要なときに showAnimalReveal(animalId) を呼び出すこと
+        const socket = new WebSocket("ws://YOUR_SERVER_IP:8080"); // ← あなたのサーバーIPに変更
+
+        socket.onopen = () => {
+            console.log("サーバーに接続しました");
+            document.querySelector(".status-message").textContent = "接続成功！";
+
+            const sessionId = Math.random().toString(36).substring(2, 10);
+            socket.send(JSON.stringify({
+                type: "init_session",
+                sessionId: sessionId
+            }));
+        };
+
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.type === "user_assigned") {
+                showAnimalReveal(data.animalId);
+            }
+        };
+
+        socket.onerror = (error) => {
+            console.error("WebSocket エラー:", error);
+            document.querySelector(".status-message").textContent = "接続エラーが発生しました";
+        };
+
+        socket.onclose = () => {
+            console.log("サーバーとの接続が切断されました");
+            document.querySelector(".status-message").textContent = "切断されました";
+        };
+
         function showAnimalReveal(animalId) {
             const animals = {
                 1: { name: "カバ", description: "水辺に住む大きな動物です。", image: "CH_kaba_ver001.png" },
